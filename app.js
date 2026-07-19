@@ -188,6 +188,86 @@ app.use((req, res, next) => {
 });
 // Function to validate if the URL is a safe relative path
 const isSafeRedirect = (url) => /^\/[a-zA-Z0-9/_-]*$/.test(url);
+// Function to detect if the incoming request prefers/needs JSON instead of HTML
+const wantsJson = (req) => {
+  const accept = req.headers.accept || '';
+  return req.xhr || (accept.includes('application/json') && !accept.includes('text/html')) || req.query.format === 'json' || req.headers['x-api-request'] === 'true';
+};
+
+// Dynamic response interceptor middleware (content negotiation for single-page-app / API clients)
+app.use((req, res, next) => {
+  const originalRender = res.render;
+  res.render = function (view, options, callback) {
+    console.log(`Intercepted render for view: ${view}, options: ${JSON.stringify(options)}`);
+    if (wantsJson(req)) {
+      const rawFlash = req.flash ? req.flash() : {};
+      const messages = {};
+      for (const [type, list] of Object.entries(rawFlash)) {
+        const arr = Array.isArray(list) ? list : [list];
+        messages[type] = arr.map((item) => (item && typeof item === 'object' && 'msg' in item ? item : { msg: String(item) }));
+      }
+
+      const localsData = Object.assign({}, res.locals, typeof options === 'object' ? options : {});
+      const keysToRemove = ['settings', 'cache', '_locals', 'user', 'getFileHash', 'currentPath', 'messages'];
+      const cleanedData = {};
+      for (const key of Object.keys(localsData)) {
+        if (!keysToRemove.includes(key)) {
+          cleanedData[key] = localsData[key];
+        }
+      }
+
+      return res.json({
+        success: true,
+        view,
+        user: req.user
+          ? {
+              id: req.user.id,
+              email: req.user.email,
+              name: req.user.profile?.name,
+              picture: req.user.profile?.picture,
+            }
+          : null,
+        messages: Object.keys(messages).length ? messages : undefined,
+        data: cleanedData,
+      });
+    }
+    return originalRender.call(this, view, options, callback);
+  };
+
+  const originalRedirect = res.redirect;
+  res.redirect = function (status, url) {
+    let redirectUrl = url;
+    let statusCode = status;
+    if (typeof status === 'string') {
+      redirectUrl = status;
+      statusCode = 302;
+    }
+
+    if (wantsJson(req)) {
+      const rawFlash = req.flash ? req.flash() : {};
+      const messages = {};
+      for (const [type, list] of Object.entries(rawFlash)) {
+        const arr = Array.isArray(list) ? list : [list];
+        messages[type] = arr.map((item) => (item && typeof item === 'object' && 'msg' in item ? item : { msg: String(item) }));
+      }
+
+      return res.status(200).json({
+        success: true,
+        redirect: redirectUrl,
+        statusCode,
+        messages: Object.keys(messages).length ? messages : undefined,
+      });
+    }
+
+    if (typeof status === 'string') {
+      return originalRedirect.call(this, redirectUrl);
+    }
+    return originalRedirect.call(this, statusCode, redirectUrl);
+  };
+
+  next();
+});
+
 app.use((req, res, next) => {
   // After successful login, redirect back to the intended page
   // Only set returnTo for GET requests (Only pages that a user can navigate to)
@@ -443,15 +523,36 @@ app.get('/auth/failure', (req, res) => {
 app.use((req, res, next) => {
   const err = new Error('Not Found');
   err.status = 404;
+  if (wantsJson(req)) {
+    return res.status(404).json({ success: false, error: 'Page Not Found', status: 404 });
+  }
   res.status(404).send('Page Not Found');
 });
 
 if (process.env.NODE_ENV === 'development') {
   // only use in development
-  app.use(errorHandler());
+  app.use((err, req, res, next) => {
+    if (wantsJson(req)) {
+      console.error(err);
+      return res.status(err.status || 500).json({
+        success: false,
+        error: err.message || 'Server Error',
+        status: err.status || 500,
+        stack: err.stack,
+      });
+    }
+    errorHandler()(err, req, res, next);
+  });
 } else {
   app.use((err, req, res, next) => {
     console.error(err);
+    if (wantsJson(req)) {
+      return res.status(err.status || 500).json({
+        success: false,
+        error: err.message || 'Server Error',
+        status: err.status || 500,
+      });
+    }
     res.status(500).send('Server Error');
   });
 }

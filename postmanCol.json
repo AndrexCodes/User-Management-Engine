@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "76d1a938-12ab-4bc0-9883-e028b188c03e",
     "name": "User Management Engine API Collection",
-    "description": "Postman Collection for AndrexCodes/User-Management-Engine.\n\nThis collection maps all HTTP routes exposed by the Express application, including standard user authentication, session-based account profile updates, general routes, and third-party API integration proxies and AI demos (Groq Vision, LLM Classifier, RAG, AI Agent Chat). \n\n### CSRF Protection & Lusca Middleware\nMost POST/PUT requests are guarded by `lusca.csrf` middleware. In Postman, you will need to:\n1. Send a `GET` request to `/login` or the respective page to initialize the session and extract the `_csrf` token.\n2. Pass the `_csrf` token in either the form body as `_csrf` or the headers under `X-CSRF-Token`.\n3. Make sure Postman is configured to allow/store cookies (enabled by default).",
+    "description": "Postman Collection for AndrexCodes/User-Management-Engine.\n\nThis collection maps all HTTP routes exposed by the Express application, including standard user authentication, session-based account profile updates, general routes, third-party API integration proxies, and AI demos (Groq Vision, LLM Classifier, RAG, AI Agent Chat). \n\n### CSRF Protection\nMost POST/PUT/DELETE requests are guarded by CSRF middleware. We have exposed a dedicated endpoint to retrieve this token:\n1. Send a `GET` request to `/api/csrf-token`. This request has a test script that automatically saves the retrieved token to the `CSRF_TOKEN` collection variable.\n2. All POST, PUT, and DELETE requests in this collection are pre-configured to send the `X-CSRF-Token` header set to `{{CSRF_TOKEN}}`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -10,6 +10,29 @@
       "name": "1. Authentication",
       "description": "All routes regarding sign in, sign up, magic links, two-factor authentication (2FA), WebAuthn passwordless authentication, and forgot/reset password flows.",
       "item": [
+        {
+          "name": "Fetch CSRF Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["var jsonData = pm.response.json();", "if (jsonData.csrfToken) {", "    pm.collectionVariables.set(\"CSRF_TOKEN\", jsonData.csrfToken);", "    console.log(\"Saved CSRF_TOKEN: \", jsonData.csrfToken);", "}"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/csrf-token",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "csrf-token"]
+            },
+            "description": "Fetch a valid CSRF token from the server. The test script will automatically save this token into the `CSRF_TOKEN` variable for use in subsequent state-changing requests."
+          },
+          "response": []
+        },
         {
           "name": "Login Form",
           "request": {
@@ -32,6 +55,12 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "description": "CSRF token fetched from /api/csrf-token",
+                "type": "text"
               }
             ],
             "body": {
@@ -52,7 +81,7 @@
                 {
                   "key": "_csrf",
                   "value": "{{CSRF_TOKEN}}",
-                  "description": "CSRF Token retrieved from the GET form",
+                  "description": "Alternative CSRF Token field",
                   "type": "text"
                 }
               ]
@@ -108,6 +137,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -117,11 +151,6 @@
                   "key": "code",
                   "value": "123456",
                   "description": "The 6-digit verification code sent to email",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -143,17 +172,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
-                }
-              ]
+              "urlencoded": []
             },
             "url": {
               "raw": "{{BASE_URL}}/login/2fa/resend",
@@ -186,6 +214,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -195,11 +228,6 @@
                   "key": "code",
                   "value": "123456",
                   "description": "The standard 6-digit TOTP code",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -221,6 +249,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -229,11 +262,6 @@
                 {
                   "key": "email",
                   "value": "user@example.com",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -255,11 +283,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"credential\": {\n    \"id\": \"...\",\n    \"rawId\": \"...\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"authenticatorData\": \"...\",\n      \"clientDataJSON\": \"...\",\n      \"signature\": \"...\",\n      \"userHandle\": \"...\"\n    }\n  },\n  \"_csrf\": \"{{CSRF_TOKEN}}\"\n}"
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"credential\": {\n    \"id\": \"...\",\n    \"rawId\": \"...\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"authenticatorData\": \"...\",\n      \"clientDataJSON\": \"...\",\n      \"signature\": \"...\",\n      \"userHandle\": \"...\"\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/login/webauthn-verify",
@@ -292,6 +325,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -310,11 +348,6 @@
                 {
                   "key": "confirmPassword",
                   "value": "securePassword123",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -350,6 +383,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -358,11 +396,6 @@
                 {
                   "key": "email",
                   "value": "user@example.com",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -404,6 +437,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -417,11 +455,6 @@
                 {
                   "key": "confirmPassword",
                   "value": "myNewSuperSecurePassword1!",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -452,29 +485,6 @@
               "path": ["logout"]
             },
             "description": "Closes the current session and clears cookies."
-          },
-          "response": []
-        },
-        {
-          "name": "Fetch CSRF Token",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": ["var jsonData = pm.response.json();", "if (jsonData.csrfToken) {", "    pm.globals.set(\"CSRF_TOKEN\", jsonData.csrfToken);", "    console.log(\"Saved CSRF_TOKEN: \", jsonData.csrfToken);", "}"],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{BASE_URL}}/api/csrf-token",
-              "host": ["{{BASE_URL}}"],
-              "path": ["api", "csrf-token"]
-            },
-            "description": "Fetch a valid CSRF token from the server to use in decoupled/SPA client POST/PUT/DELETE requests."
           },
           "response": []
         }
@@ -540,6 +550,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -569,11 +584,6 @@
                   "key": "website",
                   "value": "https://github.com/AndrexCodes",
                   "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
                 }
               ]
             },
@@ -594,6 +604,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -607,11 +622,6 @@
                 {
                   "key": "confirmPassword",
                   "value": "myBrandNewPassword123",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -633,17 +643,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
-                }
-              ]
+              "urlencoded": []
             },
             "url": {
               "raw": "{{BASE_URL}}/account/2fa/email/enable",
@@ -662,17 +671,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
-                }
-              ]
+              "urlencoded": []
             },
             "url": {
               "raw": "{{BASE_URL}}/account/2fa/email/remove",
@@ -705,6 +713,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -714,11 +727,6 @@
                   "key": "code",
                   "value": "123456",
                   "description": "The current code displayed by the TOTP application for verification",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -740,17 +748,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
-                }
-              ]
+              "urlencoded": []
             },
             "url": {
               "raw": "{{BASE_URL}}/account/2fa/totp/remove",
@@ -769,17 +776,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
-                }
-              ]
+              "urlencoded": []
             },
             "url": {
               "raw": "{{BASE_URL}}/account/webauthn/register",
@@ -798,11 +804,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"credential\": {\n    \"id\": \"...\",\n    \"rawId\": \"...\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"attestationObject\": \"...\",\n      \"clientDataJSON\": \"...\",\n      \"transports\": [\"internal\"]\n    }\n  },\n  \"_csrf\": \"{{CSRF_TOKEN}}\"\n}"
+              "raw": "{\n  \"credential\": {\n    \"id\": \"...\",\n    \"rawId\": \"...\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"attestationObject\": \"...\",\n      \"clientDataJSON\": \"...\",\n      \"transports\": [\"internal\"]\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/account/webauthn/verify",
@@ -821,6 +832,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -829,11 +845,6 @@
                 {
                   "key": "credentialId",
                   "value": "some-registered-credential-id",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -876,17 +887,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
-                }
-              ]
+              "urlencoded": []
             },
             "url": {
               "raw": "{{BASE_URL}}/account/logout-everywhere",
@@ -905,17 +915,16 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
-                }
-              ]
+              "urlencoded": []
             },
             "url": {
               "raw": "{{BASE_URL}}/account/delete",
@@ -966,6 +975,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -984,11 +998,6 @@
                 {
                   "key": "message",
                   "value": "This app is looking amazing!",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -1095,6 +1104,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1110,11 +1124,6 @@
                   "key": "stripeEmail",
                   "value": "customer@example.com",
                   "description": "Charged email address",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -1161,6 +1170,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1175,11 +1189,6 @@
                 {
                   "key": "message",
                   "value": "Hello from Postman & Twilio!",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -1317,7 +1326,13 @@
           "name": "Upload Document",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              }
+            ],
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -1334,7 +1349,7 @@
               "host": ["{{BASE_URL}}"],
               "path": ["api", "upload"]
             },
-            "description": "Uploads any file using Multer diskStorage memory handler. Note: CSRF is handled internally by Multer sequencing."
+            "description": "Uploads any file using Multer diskStorage memory handler."
           },
           "response": []
         },
@@ -1508,6 +1523,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
@@ -1517,11 +1537,6 @@
                   "key": "inputText",
                   "value": "I haven't received my refund of $50 for order #48291 even though it was cancelled 10 days ago.",
                   "description": "The customer service text message to classify",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
                   "type": "text"
                 }
               ]
@@ -1552,7 +1567,13 @@
           "name": "Analyze Camera Image",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              }
+            ],
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -1593,26 +1614,28 @@
             "method": "POST",
             "header": [
               {
-                "key": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
-              "mode": "urlencoded",
-              "urlencoded": [
+              "mode": "formdata",
+              "formdata": [
                 {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
-                  "type": "text"
+                  "key": "myFiles",
+                  "description": "A PDF document to parse, embed, and ingest into the RAG vector store.",
+                  "type": "file",
+                  "src": []
                 }
               ]
             },
             "url": {
-              "raw": "{{BASE_URL}}/ai/rag/ingest",
+              "raw": "{{BASE_URL}}/ai/rag",
               "host": ["{{BASE_URL}}"],
-              "path": ["ai", "rag", "ingest"]
+              "path": ["ai", "rag"]
             },
-            "description": "Triggers document ingestion pipeline scanning `/rag_input` directory for raw PDF documents, splitting them into RecursiveCharacterTextSplitter chunks, embedding them with Hugging Face models, and storing them in MongoDB Atlas vector collections."
+            "description": "Upload and parse files to build semantic embeddings in RAG store."
           },
           "response": []
         },
@@ -1624,35 +1647,35 @@
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
                 {
-                  "key": "question",
-                  "value": "What policies govern product returns?",
-                  "description": "The domain specific knowledge base query question",
-                  "type": "text"
-                },
-                {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
+                  "key": "queryText",
+                  "value": "What are the key findings in the loaded document?",
+                  "description": "The question to query against vector stores.",
                   "type": "text"
                 }
               ]
             },
             "url": {
-              "raw": "{{BASE_URL}}/ai/rag/ask",
+              "raw": "{{BASE_URL}}/ai/rag/query",
               "host": ["{{BASE_URL}}"],
-              "path": ["ai", "rag", "ask"]
+              "path": ["ai", "rag", "query"]
             },
-            "description": "Converts question text into vector embeddings, performs Cosine similarity search over Atlas chunks collection, compiles prompt context, and retrieves a comparison response of standard non-grounded LLM vs RAG augmented grounded LLM answers."
+            "description": "Queries vector database chunks of ingested PDFs to yield context-aware RAG responses using LLMs."
           },
           "response": []
         },
         {
-          "name": "AI Agent Panel",
+          "name": "Get AI Agent Chat Dashboard",
           "request": {
             "method": "GET",
             "header": [],
@@ -1661,59 +1684,70 @@
               "host": ["{{BASE_URL}}"],
               "path": ["ai", "ai-agent"]
             },
-            "description": "Loads past conversation context from MongoDBSaver checkpointer and serves chat UI."
+            "description": "Retrieves chat dashboard UI with previous conversation threads history."
           },
           "response": []
         },
         {
-          "name": "AI Agent Chat Stream",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"message\": \"Hi, could you check the status of my order ord_48291?\"\n}"
-            },
-            "url": {
-              "raw": "{{BASE_URL}}/ai/ai-agent/chat",
-              "host": ["{{BASE_URL}}"],
-              "path": ["ai", "ai-agent", "chat"]
-            },
-            "description": "Submits a conversational chat message to the e-commerce client agent. Response is streamed back to client in real-time Server-Sent Events (SSE) format, performing automated agentic reasoning, checking databases, generating refund identifiers, and escalating to Tier 2 support if needed."
-          },
-          "response": []
-        },
-        {
-          "name": "Reset AI Agent Conversation",
+          "name": "Submit Message to AI Agent Chatbot",
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
               }
             ],
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
                 {
-                  "key": "_csrf",
-                  "value": "{{CSRF_TOKEN}}",
+                  "key": "message",
+                  "value": "Can you check if there are any active promotions or help me organize my weekly calendar?",
+                  "description": "The interactive prompt query directed to the conversational workflow agent.",
                   "type": "text"
                 }
               ]
             },
             "url": {
-              "raw": "{{BASE_URL}}/ai/ai-agent/reset",
+              "raw": "{{BASE_URL}}/ai/ai-agent/chat",
               "host": ["{{BASE_URL}}"],
-              "path": ["ai", "ai-agent", "reset"]
+              "path": ["ai", "ai-agent", "chat"]
             },
-            "description": "Clears conversation history checkpoints from MongoDB checkpointer collection."
+            "description": "Triggers multi-turn chatbot conversation state loops."
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Chat Session History",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/ai/ai-agent/clear",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "ai-agent", "clear"]
+            },
+            "description": "Clears standard conversational checkpoints memory from state stores."
           },
           "response": []
         }
@@ -1723,12 +1757,12 @@
   "variable": [
     {
       "key": "BASE_URL",
-      "value": "https://ais-dev-ozpaxhkolfawsdzhjvauae-231356390789.europe-west3.run.app",
+      "value": "https://ais-pre-ozpaxhkolfawsdzhjvauae-231356390789.europe-west3.run.app",
       "type": "string"
     },
     {
       "key": "CSRF_TOKEN",
-      "value": "obtain-from-get-request-cookie-or-form",
+      "value": "",
       "type": "string"
     }
   ]
