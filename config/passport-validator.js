@@ -179,7 +179,7 @@ function logOAuthStatus() {
     results.errors.forEach((err) => console.log(`   - ${err}`));
   }
 
-  console.log(`${'═'.repeat(40) }\n`);
+  console.log(`${'═'.repeat(40)}\n`);
 
   return results;
 }
