@@ -2,6 +2,7 @@
  * Module dependencies.
  */
 const path = require('node:path');
+const dns = require('dns');
 const fs = require('node:fs');
 const express = require('express');
 const compression = require('compression');
@@ -28,10 +29,14 @@ try {
   }
 }
 
+// Set DNS servers to avoid potential DNS resolution issues with MongoDB Atlas
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
 /**
  * Set config values
  */
-const secureTransfer = process.env.BASE_URL.startsWith('https');
+// const secureTransfer = process.env.BASE_URL.startsWith('https');
+const secureTransfer = false;
 
 /**
  * Rate limiting configuration

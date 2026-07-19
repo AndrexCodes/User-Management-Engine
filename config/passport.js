@@ -13,6 +13,10 @@ const { OAuth } = require('oauth');
 const validator = require('validator');
 
 const User = require('../models/User');
+const { ensureProviderCredentials, logOAuthStatus } = require('./passport-validator');
+
+// Log OAuth configuration status at startup
+logOAuthStatus();
 
 passport.serializeUser((user, done) => {
   done(null, user.id);
@@ -247,593 +251,652 @@ async function saveOAuth2UserTokens(req, accessToken, refreshToken, accessTokenE
 /**
  * Sign in with Facebook.
  */
+if (ensureProviderCredentials('facebook').valid) {
+  FacebookStrategy.prototype.authorizationParams = function () {
+    return { auth_type: 'rerequest' };
+  };
 
-FacebookStrategy.prototype.authorizationParams = function () {
-  return { auth_type: 'rerequest' };
-};
-
-passport.use(
-  new FacebookStrategy(
-    {
-      clientID: process.env.FACEBOOK_ID,
-      clientSecret: process.env.FACEBOOK_SECRET,
-      callbackURL: `${process.env.BASE_URL}/auth/facebook/callback`,
-      profileFields: ['name', 'email', 'link', 'locale', 'timezone', 'gender'],
-      scope: ['public_profile', 'email'],
-      state: true,
-      passReqToCallback: true,
-    },
-    async (req, accessToken, refreshToken, params, profile, done) => {
-      // Facebook does not provide a refresh token but includes an expiration for the access token
-      try {
-        const providerProfile = {
-          id: profile.id,
-          name: `${profile.name.givenName} ${profile.name.familyName}`,
-          gender: profile._json.gender,
-          picture: `https://graph.facebook.com/${profile.id}/picture?type=large`,
-          location: profile._json.location ? profile._json.location.name : '',
-          email: profile._json.email,
-        };
+  passport.use(
+    new FacebookStrategy(
+      {
+        clientID: process.env.FACEBOOK_ID,
+        clientSecret: process.env.FACEBOOK_SECRET,
+        callbackURL: `${process.env.BASE_URL}/auth/facebook/callback`,
+        profileFields: ['name', 'email', 'link', 'locale', 'timezone', 'gender'],
+        scope: ['public_profile', 'email'],
+        state: true,
+        passReqToCallback: true,
+      },
+      async (req, accessToken, refreshToken, params, profile, done) => {
+        // Facebook does not provide a refresh token but includes an expiration for the access token
         try {
-          const sessionAlreadyLoggedIn = !!req.user;
-          const user = await handleAuthLogin(req, accessToken, null, 'facebook', params, providerProfile, sessionAlreadyLoggedIn, null, true);
-          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-            req.flash('info', { msg: 'Facebook account has been linked.' });
+          const providerProfile = {
+            id: profile.id,
+            name: `${profile.name.givenName} ${profile.name.familyName}`,
+            gender: profile._json.gender,
+            picture: `https://graph.facebook.com/${profile.id}/picture?type=large`,
+            location: profile._json.location ? profile._json.location.name : '',
+            email: profile._json.email,
+          };
+          try {
+            const sessionAlreadyLoggedIn = !!req.user;
+            const user = await handleAuthLogin(req, accessToken, null, 'facebook', params, providerProfile, sessionAlreadyLoggedIn, null, true);
+            if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+              req.flash('info', { msg: 'Facebook account has been linked.' });
+            }
+            return done(null, user);
+          } catch (err) {
+            if (authError2Flash(err, req, done, 'Facebook')) return;
+            throw err;
           }
-          return done(null, user);
         } catch (err) {
-          if (authError2Flash(err, req, done, 'Facebook')) return;
-          throw err;
+          return done(err);
         }
-      } catch (err) {
-        return done(err);
-      }
-    },
-  ),
-);
+      },
+    ),
+  );
+  console.log('✅ Facebook provider initialized successfully');
+} else {
+  console.warn('⚠️  Facebook provider disabled - missing credentials');
+}
 
 /**
  * Sign in with GitHub.
  */
-passport.use(
-  new GitHubStrategy(
-    {
-      clientID: process.env.GITHUB_ID,
-      clientSecret: process.env.GITHUB_SECRET,
-      callbackURL: `${process.env.BASE_URL}/auth/github/callback`,
-      state: true,
-      passReqToCallback: true,
-      scope: ['user:email'],
-    },
-    async (req, accessToken, refreshToken, params, profile, done) => {
-      // GitHub does not provide a refresh token or an expiration
-      try {
-        // Github may return a list of email addresses instead of just one
-        // Sort by primary, then by verified, then pick the first one in the list
-        const sortedEmails = (profile.emails || []).slice().sort((a, b) => {
-          if (b.primary !== a.primary) return b.primary - a.primary;
-          if (b.verified !== a.verified) return b.verified - a.verified;
-          return 0;
-        });
-        const providerProfile = {
-          id: profile.id,
-          name: profile.displayName,
-          picture: profile._json.avatar_url,
-          location: profile._json.location,
-          website: profile._json.blog,
-          email: sortedEmails.length > 0 ? sortedEmails[0].value : null,
-        };
+if (ensureProviderCredentials('github').valid) {
+  passport.use(
+    new GitHubStrategy(
+      {
+        clientID: process.env.GITHUB_ID,
+        clientSecret: process.env.GITHUB_SECRET,
+        callbackURL: `${process.env.BASE_URL}/auth/github/callback`,
+        state: true,
+        passReqToCallback: true,
+        scope: ['user:email'],
+      },
+      async (req, accessToken, refreshToken, params, profile, done) => {
+        // GitHub does not provide a refresh token or an expiration
         try {
-          const sessionAlreadyLoggedIn = !!req.user;
-          const user = await handleAuthLogin(req, accessToken, null, 'github', params, providerProfile, sessionAlreadyLoggedIn, null, true);
-          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-            req.flash('info', { msg: 'GitHub account has been linked.' });
+          // Github may return a list of email addresses instead of just one
+          // Sort by primary, then by verified, then pick the first one in the list
+          const sortedEmails = (profile.emails || []).slice().sort((a, b) => {
+            if (b.primary !== a.primary) return b.primary - a.primary;
+            if (b.verified !== a.verified) return b.verified - a.verified;
+            return 0;
+          });
+          const providerProfile = {
+            id: profile.id,
+            name: profile.displayName,
+            picture: profile._json.avatar_url,
+            location: profile._json.location,
+            website: profile._json.blog,
+            email: sortedEmails.length > 0 ? sortedEmails[0].value : null,
+          };
+          try {
+            const sessionAlreadyLoggedIn = !!req.user;
+            const user = await handleAuthLogin(req, accessToken, null, 'github', params, providerProfile, sessionAlreadyLoggedIn, null, true);
+            if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+              req.flash('info', { msg: 'GitHub account has been linked.' });
+            }
+            return done(null, user);
+          } catch (err) {
+            if (authError2Flash(err, req, done, 'GitHub')) return;
+            throw err;
           }
-          return done(null, user);
         } catch (err) {
-          if (authError2Flash(err, req, done, 'GitHub')) return;
-          throw err;
+          return done(err);
         }
-      } catch (err) {
-        return done(err);
-      }
-    },
-  ),
-);
+      },
+    ),
+  );
+  console.log('✅ GitHub provider initialized successfully');
+} else {
+  console.warn('⚠️  GitHub provider disabled - missing credentials');
+}
 
 /**
  * Sign in with X.
  */
-passport.use(
-  new TwitterStrategy(
-    {
-      consumerKey: process.env.X_KEY,
-      consumerSecret: process.env.X_SECRET,
-      callbackURL: `${process.env.BASE_URL}/auth/x/callback`,
-      state: true,
-      passReqToCallback: true,
-    },
-    async (req, accessToken, tokenSecret, profile, done) => {
-      try {
-        // X will not provide an email address.  Period.
-        // But a person's X username is guaranteed to be unique
-        // so we can "fake" placeholder X email address as follows:
-        const providerProfile = {
-          id: profile.id,
-          name: profile.displayName,
-          location: profile._json.location,
-          picture: profile._json.profile_image_url_https,
-          email: `${profile.username}@placeholder-x.email`,
-        };
+if (ensureProviderCredentials('x').valid) {
+  passport.use(
+    new TwitterStrategy(
+      {
+        consumerKey: process.env.X_KEY,
+        consumerSecret: process.env.X_SECRET,
+        callbackURL: `${process.env.BASE_URL}/auth/x/callback`,
+        state: true,
+        passReqToCallback: true,
+      },
+      async (req, accessToken, tokenSecret, profile, done) => {
         try {
-          const sessionAlreadyLoggedIn = !!req.user;
-          const user = await handleAuthLogin(req, accessToken, null, 'x', {}, providerProfile, sessionAlreadyLoggedIn, tokenSecret, false);
-          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-            req.flash('info', { msg: 'X account has been linked.' });
+          // X will not provide an email address.  Period.
+          // But a person's X username is guaranteed to be unique
+          // so we can "fake" placeholder X email address as follows:
+          const providerProfile = {
+            id: profile.id,
+            name: profile.displayName,
+            location: profile._json.location,
+            picture: profile._json.profile_image_url_https,
+            email: `${profile.username}@placeholder-x.email`,
+          };
+          try {
+            const sessionAlreadyLoggedIn = !!req.user;
+            const user = await handleAuthLogin(req, accessToken, null, 'x', {}, providerProfile, sessionAlreadyLoggedIn, tokenSecret, false);
+            if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+              req.flash('info', { msg: 'X account has been linked.' });
+            }
+            return done(null, user);
+          } catch (err) {
+            if (authError2Flash(err, req, done, 'X')) return;
+            throw err;
           }
-          return done(null, user);
         } catch (err) {
-          if (authError2Flash(err, req, done, 'X')) return;
-          throw err;
+          return done(err);
         }
-      } catch (err) {
-        return done(err);
-      }
-    },
-  ),
-);
+      },
+    ),
+  );
+  console.log('✅ X provider initialized successfully');
+} else {
+  console.warn('⚠️  X provider disabled - missing credentials');
+}
 
 /**
  * Sign in with Google.
  */
-const googleStrategyConfig = new GoogleStrategy(
-  {
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: '/auth/google/callback',
-    scope: ['profile', 'email', 'https://www.googleapis.com/auth/drive.metadata.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly'],
-    accessType: 'offline',
-    prompt: 'consent',
-    state: true,
-    passReqToCallback: true,
-  },
-  async (req, accessToken, refreshToken, params, profile, done) => {
-    try {
-      const providerProfile = {
-        id: profile.id,
-        name: profile.displayName,
-        gender: profile._json.gender,
-        picture: profile._json.picture,
-        email: profile.emails && profile.emails[0] && profile.emails[0].value ? profile.emails[0].value : undefined,
-      };
+if (ensureProviderCredentials('google').valid) {
+  const googleStrategyConfig = new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: '/auth/google/callback',
+      scope: ['profile', 'email', 'https://www.googleapis.com/auth/drive.metadata.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly'],
+      accessType: 'offline',
+      prompt: 'consent',
+      state: true,
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, params, profile, done) => {
       try {
-        const sessionAlreadyLoggedIn = !!req.user;
-        const user = await handleAuthLogin(req, accessToken, refreshToken, 'google', params, providerProfile, sessionAlreadyLoggedIn, null, true);
-        if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-          req.flash('info', { msg: 'Google account has been linked.' });
+        const providerProfile = {
+          id: profile.id,
+          name: profile.displayName,
+          gender: profile._json.gender,
+          picture: profile._json.picture,
+          email: profile.emails && profile.emails[0] && profile.emails[0].value ? profile.emails[0].value : undefined,
+        };
+        try {
+          const sessionAlreadyLoggedIn = !!req.user;
+          const user = await handleAuthLogin(req, accessToken, refreshToken, 'google', params, providerProfile, sessionAlreadyLoggedIn, null, true);
+          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+            req.flash('info', { msg: 'Google account has been linked.' });
+          }
+          return done(null, user);
+        } catch (err) {
+          if (authError2Flash(err, req, done, 'Google')) return;
+          throw err;
         }
-        return done(null, user);
       } catch (err) {
-        if (authError2Flash(err, req, done, 'Google')) return;
-        throw err;
+        return done(err);
       }
-    } catch (err) {
-      return done(err);
-    }
-  },
-);
-passport.use('google', googleStrategyConfig);
-refresh.use('google', googleStrategyConfig);
+    },
+  );
+  passport.use('google', googleStrategyConfig);
+  refresh.use('google', googleStrategyConfig);
+  console.log('✅ Google provider initialized successfully');
+} else {
+  console.warn('⚠️  Google provider disabled - missing credentials');
+}
 
 /**
  * Sign in with LinkedIn using OAuth2.
  */
-const linkedinStrategyConfig = new OAuth2Strategy(
-  {
-    authorizationURL: 'https://www.linkedin.com/oauth/v2/authorization',
-    tokenURL: 'https://www.linkedin.com/oauth/v2/accessToken',
-    clientID: process.env.LINKEDIN_ID,
-    clientSecret: process.env.LINKEDIN_SECRET,
-    callbackURL: `${process.env.BASE_URL}/auth/linkedin/callback`,
-    scope: ['openid', 'profile', 'email'].join(' '),
-    state: true,
-    passReqToCallback: true,
-  },
-  async (req, accessToken, refreshToken, params, profile, done) => {
-    const sessionAlreadyLoggedIn = !!req.user;
-    try {
-      // Fetch LinkedIn profile using accessToken
-      const response = await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!response.ok) {
-        return done(new Error('Failed to fetch LinkedIn profile'));
-      }
-      const linkedinProfile = await response.json();
-      if (!linkedinProfile || !linkedinProfile.sub || !linkedinProfile.name) {
-        req.flash('errors', { msg: 'Invalid LinkedIn profile data' });
-        return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
-      }
-      const providerProfile = {
-        id: linkedinProfile.sub,
-        name: linkedinProfile.name,
-        picture: linkedinProfile.picture || undefined,
-        email: linkedinProfile.email,
-      };
+if (ensureProviderCredentials('linkedin').valid) {
+  const linkedinStrategyConfig = new OAuth2Strategy(
+    {
+      authorizationURL: 'https://www.linkedin.com/oauth/v2/authorization',
+      tokenURL: 'https://www.linkedin.com/oauth/v2/accessToken',
+      clientID: process.env.LINKEDIN_ID,
+      clientSecret: process.env.LINKEDIN_SECRET,
+      callbackURL: `${process.env.BASE_URL}/auth/linkedin/callback`,
+      scope: ['openid', 'profile', 'email'].join(' '),
+      state: true,
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, params, profile, done) => {
+      const sessionAlreadyLoggedIn = !!req.user;
       try {
-        const user = await handleAuthLogin(req, accessToken, refreshToken, 'linkedin', params, providerProfile, sessionAlreadyLoggedIn, null, true);
-        if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-          req.flash('info', { msg: 'LinkedIn account has been linked.' });
+        // Fetch LinkedIn profile using accessToken
+        const response = await fetch('https://api.linkedin.com/v2/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) {
+          return done(new Error('Failed to fetch LinkedIn profile'));
         }
-        return done(null, user);
+        const linkedinProfile = await response.json();
+        if (!linkedinProfile || !linkedinProfile.sub || !linkedinProfile.name) {
+          req.flash('errors', { msg: 'Invalid LinkedIn profile data' });
+          return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
+        }
+        const providerProfile = {
+          id: linkedinProfile.sub,
+          name: linkedinProfile.name,
+          picture: linkedinProfile.picture || undefined,
+          email: linkedinProfile.email,
+        };
+        try {
+          const user = await handleAuthLogin(req, accessToken, refreshToken, 'linkedin', params, providerProfile, sessionAlreadyLoggedIn, null, true);
+          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+            req.flash('info', { msg: 'LinkedIn account has been linked.' });
+          }
+          return done(null, user);
+        } catch (err) {
+          if (authError2Flash(err, req, done, 'LinkedIn')) return;
+          throw err;
+        }
       } catch (err) {
-        if (authError2Flash(err, req, done, 'LinkedIn')) return;
-        throw err;
+        return done(err);
       }
-    } catch (err) {
-      return done(err);
-    }
-  },
-);
-passport.use('linkedin', linkedinStrategyConfig);
-refresh.use('linkedin', linkedinStrategyConfig);
+    },
+  );
+  passport.use('linkedin', linkedinStrategyConfig);
+  refresh.use('linkedin', linkedinStrategyConfig);
+  console.log('✅ LinkedIn provider initialized successfully');
+} else {
+  console.warn('⚠️  LinkedIn provider disabled - missing credentials');
+}
 
 /**
  * Sign in with Microsoft using OAuth2Strategy.
  */
-const microsoftStrategyConfig = new OAuth2Strategy(
-  {
-    authorizationURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-    tokenURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-    clientID: process.env.MICROSOFT_CLIENT_ID,
-    clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL}/auth/microsoft/callback`,
-    // Note: To get a refresh token, add 'offline_access' to the scope list.
-    // Trade-off: Users will see a permission approval screen every time they login with 'offline_access' in scope.
-    scope: ['openid', 'profile', 'email', 'User.Read'].join(' '),
-    state: true,
-    passReqToCallback: true,
-  },
-  async (req, accessToken, refreshToken, params, profile, done) => {
-    const sessionAlreadyLoggedIn = !!req.user;
-    try {
-      // Fetch Microsoft profile using accessToken
-      const response = await fetch('https://graph.microsoft.com/v1.0/me', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!response.ok) {
-        return done(new Error('Failed to fetch Microsoft profile'));
-      }
-      const microsoftProfile = await response.json();
-      if (!microsoftProfile || !microsoftProfile.id || !microsoftProfile.displayName) {
-        req.flash('errors', { msg: 'Invalid Microsoft profile data' });
-        return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
-      }
-      const providerProfile = {
-        id: microsoftProfile.id,
-        name: microsoftProfile.displayName,
-        email: microsoftProfile.mail || microsoftProfile.userPrincipalName,
-      };
+if (ensureProviderCredentials('microsoft').valid) {
+  const microsoftStrategyConfig = new OAuth2Strategy(
+    {
+      authorizationURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+      tokenURL: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+      clientID: process.env.MICROSOFT_CLIENT_ID,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+      callbackURL: `${process.env.BASE_URL}/auth/microsoft/callback`,
+      // Note: To get a refresh token, add 'offline_access' to the scope list.
+      // Trade-off: Users will see a permission approval screen every time they login with 'offline_access' in scope.
+      scope: ['openid', 'profile', 'email', 'User.Read'].join(' '),
+      state: true,
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, params, profile, done) => {
+      const sessionAlreadyLoggedIn = !!req.user;
       try {
-        const user = await handleAuthLogin(req, accessToken, refreshToken, 'microsoft', params, providerProfile, sessionAlreadyLoggedIn, null, true, {}, params.refresh_token_expires_in);
-        if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-          req.flash('info', { msg: 'Microsoft account has been linked.' });
+        // Fetch Microsoft profile using accessToken
+        const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) {
+          return done(new Error('Failed to fetch Microsoft profile'));
         }
-        return done(null, user);
+        const microsoftProfile = await response.json();
+        if (!microsoftProfile || !microsoftProfile.id || !microsoftProfile.displayName) {
+          req.flash('errors', { msg: 'Invalid Microsoft profile data' });
+          return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
+        }
+        const providerProfile = {
+          id: microsoftProfile.id,
+          name: microsoftProfile.displayName,
+          email: microsoftProfile.mail || microsoftProfile.userPrincipalName,
+        };
+        try {
+          const user = await handleAuthLogin(req, accessToken, refreshToken, 'microsoft', params, providerProfile, sessionAlreadyLoggedIn, null, true, {}, params.refresh_token_expires_in);
+          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+            req.flash('info', { msg: 'Microsoft account has been linked.' });
+          }
+          return done(null, user);
+        } catch (err) {
+          if (authError2Flash(err, req, done, 'Microsoft')) return;
+          throw err;
+        }
       } catch (err) {
-        if (authError2Flash(err, req, done, 'Microsoft')) return;
-        throw err;
+        return done(err);
       }
-    } catch (err) {
-      return done(err);
-    }
-  },
-);
-passport.use('microsoft', microsoftStrategyConfig);
-refresh.use('microsoft', microsoftStrategyConfig);
+    },
+  );
+  passport.use('microsoft', microsoftStrategyConfig);
+  refresh.use('microsoft', microsoftStrategyConfig);
+  console.log('✅ Microsoft provider initialized successfully');
+} else {
+  console.warn('⚠️  Microsoft provider disabled - missing credentials');
+}
 
 /**
  * Twitch API OAuth.
  */
-const twitchStrategyConfig = new TwitchStrategy(
-  {
-    clientID: process.env.TWITCH_CLIENT_ID,
-    clientSecret: process.env.TWITCH_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL}/auth/twitch/callback`,
-    scope: ['user:read:email', 'channel:read:subscriptions', 'moderator:read:followers'],
-    state: true,
-    passReqToCallback: true,
-  },
-  async (req, accessToken, refreshToken, params, profile, done) => {
-    try {
-      const providerProfile = {
-        id: profile.id,
-        name: profile.display_name,
-        email: profile?._json?.data?.[0]?.email ?? profile?.email ?? null,
-        picture: profile.profile_image_url,
-      };
+if (ensureProviderCredentials('twitch').valid) {
+  const twitchStrategyConfig = new TwitchStrategy(
+    {
+      clientID: process.env.TWITCH_CLIENT_ID,
+      clientSecret: process.env.TWITCH_CLIENT_SECRET,
+      callbackURL: `${process.env.BASE_URL}/auth/twitch/callback`,
+      scope: ['user:read:email', 'channel:read:subscriptions', 'moderator:read:followers'],
+      state: true,
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, params, profile, done) => {
       try {
-        const sessionAlreadyLoggedIn = !!req.user;
-        const user = await handleAuthLogin(req, accessToken, refreshToken, 'twitch', params, providerProfile, sessionAlreadyLoggedIn, null, true);
-        if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-          req.flash('info', { msg: 'Twitch account has been linked.' });
+        const providerProfile = {
+          id: profile.id,
+          name: profile.display_name,
+          email: profile?._json?.data?.[0]?.email ?? profile?.email ?? null,
+          picture: profile.profile_image_url,
+        };
+        try {
+          const sessionAlreadyLoggedIn = !!req.user;
+          const user = await handleAuthLogin(req, accessToken, refreshToken, 'twitch', params, providerProfile, sessionAlreadyLoggedIn, null, true);
+          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+            req.flash('info', { msg: 'Twitch account has been linked.' });
+          }
+          return done(null, user);
+        } catch (err) {
+          if (authError2Flash(err, req, done, 'Twitch')) return;
+          throw err;
         }
-        return done(null, user);
       } catch (err) {
-        if (authError2Flash(err, req, done, 'Twitch')) return;
-        throw err;
+        return done(err);
       }
-    } catch (err) {
-      return done(err);
-    }
-  },
-);
-passport.use('twitch', twitchStrategyConfig);
-refresh.use('twitch', twitchStrategyConfig);
+    },
+  );
+  passport.use('twitch', twitchStrategyConfig);
+  refresh.use('twitch', twitchStrategyConfig);
+  console.log('✅ Twitch provider initialized successfully');
+} else {
+  console.warn('⚠️  Twitch provider disabled - missing credentials');
+}
 
 /**
  * Tumblr API OAuth.
  */
-passport.use(
-  'tumblr',
-  new OAuthStrategy(
-    {
-      requestTokenURL: 'https://www.tumblr.com/oauth/request_token',
-      accessTokenURL: 'https://www.tumblr.com/oauth/access_token',
-      userAuthorizationURL: 'https://www.tumblr.com/oauth/authorize',
-      consumerKey: process.env.TUMBLR_KEY,
-      consumerSecret: process.env.TUMBLR_SECRET,
-      callbackURL: '/auth/tumblr/callback',
-      state: true,
-      passReqToCallback: true,
-    },
-    async (req, token, tokenSecret, profile, done) => {
-      try {
-        if (!token || !tokenSecret) {
-          throw new Error('Missing or invalid token/tokenSecret');
-        }
-        // Helper function to generate the OAuth 1.0a authHeader for Tumblr API.
-        // This function is not going to make any actual calls to
-        // tumblr's /request_token or /access_token endpoints.
-        function getTumblrAuthHeader(url, method) {
-          const oauth = new OAuth('https://www.tumblr.com/oauth/request_token', 'https://www.tumblr.com/oauth/access_token', process.env.TUMBLR_KEY, process.env.TUMBLR_SECRET, '1.0A', null, 'HMAC-SHA1');
-          return oauth.authHeader(url, token, tokenSecret, method);
-        }
-        const userInfoURL = 'https://api.tumblr.com/v2/user/info';
-        const response = await fetch(userInfoURL, { headers: { Authorization: getTumblrAuthHeader(userInfoURL, 'GET') } });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        // Extract user info from the API response
-        const tumblrUser = data.response.user;
-        const primaryBlog = tumblrUser.blogs?.find((blog) => blog.primary) || tumblrUser.blogs?.[0];
-        const providerProfile = {
-          id: primaryBlog.uuid || tumblrUser.name,
-          name: tumblrUser.name,
-          picture: primaryBlog?.avatar?.[0]?.url,
-          website: primaryBlog?.url,
-        };
+if (ensureProviderCredentials('tumblr').valid) {
+  passport.use(
+    'tumblr',
+    new OAuthStrategy(
+      {
+        requestTokenURL: 'https://www.tumblr.com/oauth/request_token',
+        accessTokenURL: 'https://www.tumblr.com/oauth/access_token',
+        userAuthorizationURL: 'https://www.tumblr.com/oauth/authorize',
+        consumerKey: process.env.TUMBLR_KEY,
+        consumerSecret: process.env.TUMBLR_SECRET,
+        callbackURL: '/auth/tumblr/callback',
+        state: true,
+        passReqToCallback: true,
+      },
+      async (req, token, tokenSecret, profile, done) => {
         try {
-          const sessionAlreadyLoggedIn = !!req.user;
-          const user = await handleAuthLogin(req, token, null, 'tumblr', {}, providerProfile, sessionAlreadyLoggedIn, tokenSecret, false);
-          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-            req.flash('info', { msg: 'Tumblr account has been linked.' });
+          if (!token || !tokenSecret) {
+            throw new Error('Missing or invalid token/tokenSecret');
           }
-          return done(null, user);
+          // Helper function to generate the OAuth 1.0a authHeader for Tumblr API.
+          // This function is not going to make any actual calls to
+          // tumblr's /request_token or /access_token endpoints.
+          function getTumblrAuthHeader(url, method) {
+            const oauth = new OAuth('https://www.tumblr.com/oauth/request_token', 'https://www.tumblr.com/oauth/access_token', process.env.TUMBLR_KEY, process.env.TUMBLR_SECRET, '1.0A', null, 'HMAC-SHA1');
+            return oauth.authHeader(url, token, tokenSecret, method);
+          }
+          const userInfoURL = 'https://api.tumblr.com/v2/user/info';
+          const response = await fetch(userInfoURL, { headers: { Authorization: getTumblrAuthHeader(userInfoURL, 'GET') } });
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          // Extract user info from the API response
+          const tumblrUser = data.response.user;
+          const primaryBlog = tumblrUser.blogs?.find((blog) => blog.primary) || tumblrUser.blogs?.[0];
+          const providerProfile = {
+            id: primaryBlog.uuid || tumblrUser.name,
+            name: tumblrUser.name,
+            picture: primaryBlog?.avatar?.[0]?.url,
+            website: primaryBlog?.url,
+          };
+          try {
+            const sessionAlreadyLoggedIn = !!req.user;
+            const user = await handleAuthLogin(req, token, null, 'tumblr', {}, providerProfile, sessionAlreadyLoggedIn, tokenSecret, false);
+            if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+              req.flash('info', { msg: 'Tumblr account has been linked.' });
+            }
+            return done(null, user);
+          } catch (err) {
+            if (authError2Flash(err, req, done, 'Tumblr')) return;
+            throw err;
+          }
         } catch (err) {
-          if (authError2Flash(err, req, done, 'Tumblr')) return;
-          throw err;
+          if (err.response) {
+            // Log API response error details for debugging
+            console.error('Tumblr API Error:', {
+              status: err.response.status,
+              headers: err.response.headers,
+              data: err.response.data,
+            });
+          } else {
+            console.error('Unexpected Error:', err.message);
+          }
+          return done(err);
         }
-      } catch (err) {
-        if (err.response) {
-          // Log API response error details for debugging
-          console.error('Tumblr API Error:', {
-            status: err.response.status,
-            headers: err.response.headers,
-            data: err.response.data,
-          });
-        } else {
-          console.error('Unexpected Error:', err.message);
-        }
-        return done(err);
-      }
-    },
-  ),
-);
+      },
+    ),
+  );
+  console.log('✅ Tumblr provider initialized successfully');
+} else {
+  console.warn('⚠️  Tumblr provider disabled - missing credentials');
+}
 
 /**
  * Steam API OpenID.
  */
-passport.use(
-  new SteamOpenIdStrategy(
-    {
-      apiKey: process.env.STEAM_KEY,
-      returnURL: `${process.env.BASE_URL}/auth/steam/callback`,
-      profile: true,
-      state: true,
-    },
-    async (req, identifier, profile, done) => {
-      const steamId = identifier.match(/\d+$/)[0];
-      const profileURL = `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${process.env.STEAM_KEY}&steamids=${steamId}`;
-      const sessionAlreadyLoggedIn = !!req.user;
-      // Fetch Steam profile data
-      let providerProfile;
-      try {
-        const response = await fetch(profileURL);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+if (ensureProviderCredentials('steam').valid) {
+  passport.use(
+    new SteamOpenIdStrategy(
+      {
+        apiKey: process.env.STEAM_KEY,
+        returnURL: `${process.env.BASE_URL}/auth/steam/callback`,
+        profile: true,
+        state: true,
+      },
+      async (req, identifier, profile, done) => {
+        const steamId = identifier.match(/\d+$/)[0];
+        const profileURL = `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${process.env.STEAM_KEY}&steamids=${steamId}`;
+        const sessionAlreadyLoggedIn = !!req.user;
+        // Fetch Steam profile data
+        let providerProfile;
+        try {
+          const response = await fetch(profileURL);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          const players = data && data.response && Array.isArray(data.response.players) ? data.response.players : [];
+          if (players.length === 0) {
+            req.flash('errors', { msg: 'Invalid Steam profile data' });
+            return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
+          }
+          providerProfile = {
+            id: steamId,
+            name: data.response.players[0].personaname,
+            picture: data.response.players[0].avatarmedium,
+          };
+        } catch (err) {
+          console.log(err);
+          return done(err);
         }
-        const data = await response.json();
-        const players = data && data.response && Array.isArray(data.response.players) ? data.response.players : [];
-        if (players.length === 0) {
-          req.flash('errors', { msg: 'Invalid Steam profile data' });
-          return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
-        }
-        providerProfile = {
-          id: steamId,
-          name: data.response.players[0].personaname,
-          picture: data.response.players[0].avatarmedium,
-        };
-      } catch (err) {
-        console.log(err);
-        return done(err);
-      }
 
-      try {
-        const user = await handleAuthLogin(req, steamId, null, 'steam', {}, providerProfile, sessionAlreadyLoggedIn, null, false);
-        if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-          req.flash('info', { msg: 'Steam account has been linked.' });
+        try {
+          const user = await handleAuthLogin(req, steamId, null, 'steam', {}, providerProfile, sessionAlreadyLoggedIn, null, false);
+          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+            req.flash('info', { msg: 'Steam account has been linked.' });
+          }
+          return done(null, user);
+        } catch (err) {
+          if (authError2Flash(err, req, done, 'Steam')) return;
+          return done(err);
         }
-        return done(null, user);
-      } catch (err) {
-        if (authError2Flash(err, req, done, 'Steam')) return;
-        return done(err);
-      }
-    },
-  ),
-);
+      },
+    ),
+  );
+  console.log('✅ Steam provider initialized successfully');
+} else {
+  console.warn('⚠️  Steam provider disabled - missing credentials');
+}
 
 /**
  * Intuit/QuickBooks API OAuth.
  */
-const quickbooksStrategyConfig = new OAuth2Strategy(
-  {
-    authorizationURL: 'https://appcenter.intuit.com/connect/oauth2',
-    tokenURL: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
-    clientID: process.env.QUICKBOOKS_CLIENT_ID,
-    clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL}/auth/quickbooks/callback`,
-    scope: ['com.intuit.quickbooks.accounting'],
-    state: true,
-    passReqToCallback: true,
-  },
-  async (req, accessToken, refreshToken, params, profile, done) => {
-    try {
-      const user = await saveOAuth2UserTokens(req, accessToken, refreshToken, params.expires_in, params.x_refresh_token_expires_in, 'quickbooks', { quickbooks: req.query.realmId });
-      req.flash('info', { msg: 'Quickbooks account has been linked.' });
-      return done(null, user);
-    } catch (err) {
-      return done(err);
-    }
-  },
-);
-passport.use('quickbooks', quickbooksStrategyConfig);
-refresh.use('quickbooks', quickbooksStrategyConfig);
+if (ensureProviderCredentials('quickbooks').valid) {
+  const quickbooksStrategyConfig = new OAuth2Strategy(
+    {
+      authorizationURL: 'https://appcenter.intuit.com/connect/oauth2',
+      tokenURL: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
+      clientID: process.env.QUICKBOOKS_CLIENT_ID,
+      clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET,
+      callbackURL: `${process.env.BASE_URL}/auth/quickbooks/callback`,
+      scope: ['com.intuit.quickbooks.accounting'],
+      state: true,
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, params, profile, done) => {
+      try {
+        const user = await saveOAuth2UserTokens(req, accessToken, refreshToken, params.expires_in, params.x_refresh_token_expires_in, 'quickbooks', { quickbooks: req.query.realmId });
+        req.flash('info', { msg: 'Quickbooks account has been linked.' });
+        return done(null, user);
+      } catch (err) {
+        return done(err);
+      }
+    },
+  );
+  passport.use('quickbooks', quickbooksStrategyConfig);
+  refresh.use('quickbooks', quickbooksStrategyConfig);
+  console.log('✅ QuickBooks provider initialized successfully');
+} else {
+  console.warn('⚠️  QuickBooks provider disabled - missing credentials');
+}
 
 /**
  * trakt.tv API OAuth.
  */
-const traktStrategyConfig = new OAuth2Strategy(
-  {
-    authorizationURL: 'https://api.trakt.tv/oauth/authorize',
-    tokenURL: 'https://api.trakt.tv/oauth/token',
-    clientID: process.env.TRAKT_ID,
-    clientSecret: process.env.TRAKT_SECRET,
-    callbackURL: `${process.env.BASE_URL}/auth/trakt/callback`,
-    state: true,
-    passReqToCallback: true,
-  },
-  async (req, accessToken, refreshToken, params, profile, done) => {
-    try {
-      const response = await fetch('https://api.trakt.tv/users/me?extended=full', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'trakt-api-version': 2,
-          'trakt-api-key': process.env.TRAKT_ID,
-          'Content-Type': 'application/json',
-          'User-Agent': 'Hackathon-Starter',
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      if (!data?.ids?.slug || !data?.name) {
-        req.flash('errors', { msg: 'Invalid Trakt profile data' });
-        return req.user ? done(null, req.user) : done(null, false);
-      }
-      const providerProfile = {
-        id: data.ids.slug,
-        name: data.name,
-        gender: data.gender,
-        picture: data.images?.avatar?.full,
-        location: data.location,
-      };
-      const sessionAlreadyLoggedIn = !!req.user;
+if (ensureProviderCredentials('trakt').valid) {
+  const traktStrategyConfig = new OAuth2Strategy(
+    {
+      authorizationURL: 'https://api.trakt.tv/oauth/authorize',
+      tokenURL: 'https://api.trakt.tv/oauth/token',
+      clientID: process.env.TRAKT_ID,
+      clientSecret: process.env.TRAKT_SECRET,
+      callbackURL: `${process.env.BASE_URL}/auth/trakt/callback`,
+      state: true,
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, params, profile, done) => {
       try {
-        const user = await handleAuthLogin(req, accessToken, refreshToken, 'trakt', params, providerProfile, sessionAlreadyLoggedIn, null, true, { trakt: data.ids.slug }, params.x_refresh_token_expires_in || null);
-        if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-          req.flash('info', { msg: 'Trakt account has been linked.' });
+        const response = await fetch('https://api.trakt.tv/users/me?extended=full', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'trakt-api-version': 2,
+            'trakt-api-key': process.env.TRAKT_ID,
+            'Content-Type': 'application/json',
+            'User-Agent': 'Hackathon-Starter',
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return done(null, user);
+        const data = await response.json();
+        if (!data?.ids?.slug || !data?.name) {
+          req.flash('errors', { msg: 'Invalid Trakt profile data' });
+          return req.user ? done(null, req.user) : done(null, false);
+        }
+        const providerProfile = {
+          id: data.ids.slug,
+          name: data.name,
+          gender: data.gender,
+          picture: data.images?.avatar?.full,
+          location: data.location,
+        };
+        const sessionAlreadyLoggedIn = !!req.user;
+        try {
+          const user = await handleAuthLogin(req, accessToken, refreshToken, 'trakt', params, providerProfile, sessionAlreadyLoggedIn, null, true, { trakt: data.ids.slug }, params.x_refresh_token_expires_in || null);
+          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+            req.flash('info', { msg: 'Trakt account has been linked.' });
+          }
+          return done(null, user);
+        } catch (err) {
+          if (authError2Flash(err, req, done, 'Trakt')) return;
+          return done(err);
+        }
       } catch (err) {
-        if (authError2Flash(err, req, done, 'Trakt')) return;
         return done(err);
       }
-    } catch (err) {
-      return done(err);
-    }
-  },
-);
-passport.use('trakt', traktStrategyConfig);
-refresh.use('trakt', traktStrategyConfig);
+    },
+  );
+  passport.use('trakt', traktStrategyConfig);
+  refresh.use('trakt', traktStrategyConfig);
+  console.log('✅ Trakt provider initialized successfully');
+} else {
+  console.warn('⚠️  Trakt provider disabled - missing credentials');
+}
 
 /**
  * Sign in with Discord using OAuth2Strategy.
  */
-const discordStrategyConfig = new OAuth2Strategy(
-  {
-    authorizationURL: 'https://discord.com/api/oauth2/authorize',
-    tokenURL: 'https://discord.com/api/oauth2/token',
-    clientID: process.env.DISCORD_CLIENT_ID,
-    clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: `${process.env.BASE_URL}/auth/discord/callback`,
-    scope: ['identify', 'email'].join(' '),
-    state: true,
-    passReqToCallback: true,
-  },
-  async (req, accessToken, refreshToken, params, profile, done) => {
-    const sessionAlreadyLoggedIn = !!req.user;
-    try {
-      // Fetch Discord profile using accessToken
-      const response = await fetch('https://discord.com/api/users/@me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-      if (!response.ok) {
-        return done(new Error('Failed to fetch Discord profile'));
-      }
-      const discordProfile = await response.json();
-      if (!discordProfile || !discordProfile.id || !discordProfile.username) {
-        req.flash('errors', { msg: 'Invalid Discord profile data' });
-        return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
-      }
-      const providerProfile = {
-        id: discordProfile.id,
-        name: discordProfile.username,
-        email: discordProfile.email,
-        picture: discordProfile.avatar ? `https://cdn.discordapp.com/avatars/${discordProfile.id}/${discordProfile.avatar}.png` : undefined,
-      };
+if (ensureProviderCredentials('discord').valid) {
+  const discordStrategyConfig = new OAuth2Strategy(
+    {
+      authorizationURL: 'https://discord.com/api/oauth2/authorize',
+      tokenURL: 'https://discord.com/api/oauth2/token',
+      clientID: process.env.DISCORD_CLIENT_ID,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      callbackURL: `${process.env.BASE_URL}/auth/discord/callback`,
+      scope: ['identify', 'email'].join(' '),
+      state: true,
+      passReqToCallback: true,
+    },
+    async (req, accessToken, refreshToken, params, profile, done) => {
+      const sessionAlreadyLoggedIn = !!req.user;
       try {
-        const user = await handleAuthLogin(req, accessToken, refreshToken, 'discord', params, providerProfile, sessionAlreadyLoggedIn, null, true);
-        if (sessionAlreadyLoggedIn && req.user.id === user.id) {
-          req.flash('info', { msg: 'Discord account has been linked.' });
+        // Fetch Discord profile using accessToken
+        const response = await fetch('https://discord.com/api/users/@me', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+        if (!response.ok) {
+          return done(new Error('Failed to fetch Discord profile'));
         }
-        return done(null, user);
+        const discordProfile = await response.json();
+        if (!discordProfile || !discordProfile.id || !discordProfile.username) {
+          req.flash('errors', { msg: 'Invalid Discord profile data' });
+          return sessionAlreadyLoggedIn ? done(null, req.user) : done(null, false);
+        }
+        const providerProfile = {
+          id: discordProfile.id,
+          name: discordProfile.username,
+          email: discordProfile.email,
+          picture: discordProfile.avatar ? `https://cdn.discordapp.com/avatars/${discordProfile.id}/${discordProfile.avatar}.png` : undefined,
+        };
+        try {
+          const user = await handleAuthLogin(req, accessToken, refreshToken, 'discord', params, providerProfile, sessionAlreadyLoggedIn, null, true);
+          if (sessionAlreadyLoggedIn && req.user.id === user.id) {
+            req.flash('info', { msg: 'Discord account has been linked.' });
+          }
+          return done(null, user);
+        } catch (err) {
+          if (authError2Flash(err, req, done, 'Discord')) return;
+          throw err;
+        }
       } catch (err) {
-        if (authError2Flash(err, req, done, 'Discord')) return;
-        throw err;
+        return done(err);
       }
-    } catch (err) {
-      return done(err);
-    }
-  },
-);
-passport.use('discord', discordStrategyConfig);
-refresh.use('discord', discordStrategyConfig);
+    },
+  );
+  passport.use('discord', discordStrategyConfig);
+  refresh.use('discord', discordStrategyConfig);
+  console.log('✅ Discord provider initialized successfully');
+} else {
+  console.warn('⚠️  Discord provider disabled - missing credentials');
+}
 
 /**
  * Token Revocation Config
