@@ -1,0 +1,2285 @@
+{
+  "info": {
+    "_postman_id": "76d1a938-12ab-4bc0-9883-e028b188c03e",
+    "name": "User Management Engine API Collection",
+    "description": "Postman Collection for AndrexCodes/User-Management-Engine.\n\nThis collection maps all HTTP routes exposed by the Express application, including standard user authentication, session-based account profile updates, general routes, third-party API integration proxies, and AI demos (Groq Vision, LLM Classifier, RAG, AI Agent Chat). \n\n### CSRF Protection\nMost POST/PUT/DELETE requests are guarded by CSRF middleware. We have exposed a dedicated endpoint to retrieve this token:\n1. Send a `GET` request to `/api/csrf-token`. This request has a test script that automatically saves the retrieved token to the `CSRF_TOKEN` collection variable.\n2. All POST, PUT, and DELETE requests in this collection are pre-configured to send the `X-CSRF-Token` header set to `{{CSRF_TOKEN}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "All routes regarding sign in, sign up, magic links, two-factor authentication (2FA), WebAuthn passwordless authentication, and forgot/reset password flows.",
+      "item": [
+        {
+          "name": "Fetch CSRF Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["var jsonData = pm.response.json();", "if (jsonData.csrfToken) {", "    pm.collectionVariables.set(\"CSRF_TOKEN\", jsonData.csrfToken);", "    console.log(\"Saved CSRF_TOKEN: \", jsonData.csrfToken);", "}"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/csrf-token",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "csrf-token"]
+            },
+            "description": "Fetch a valid CSRF token from the server. The test script will automatically save this token into the `CSRF_TOKEN` variable for use in subsequent state-changing requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/login",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login"]
+            },
+            "description": "Returns the HTML page containing the sign-in form. Also initializes a session and sets the CSRF cookie."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "description": "CSRF token fetched from /api/csrf-token",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "email",
+                  "value": "user@example.com",
+                  "description": "The email of the registering/registered user",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "password123",
+                  "description": "The user password",
+                  "type": "text"
+                },
+                {
+                  "key": "_csrf",
+                  "value": "{{CSRF_TOKEN}}",
+                  "description": "Alternative CSRF Token field",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/login",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login"]
+            },
+            "description": "Submit email and password to log in."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Magic Link Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/login/verify/:token",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "verify", ":token"],
+              "variable": [
+                {
+                  "key": "token",
+                  "value": "magic-link-token-here"
+                }
+              ]
+            },
+            "description": "Validates a magic login link token sent to user's email."
+          },
+          "response": []
+        },
+        {
+          "name": "2FA Email Verification Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/login/2fa",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "2fa"]
+            },
+            "description": "Renders the 2FA form where the user enters the security code sent to their email."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit 2FA Email Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "code",
+                  "value": "123456",
+                  "description": "The 6-digit verification code sent to email",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/login/2fa",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "2fa"]
+            },
+            "description": "Validates the email security code to complete login."
+          },
+          "response": []
+        },
+        {
+          "name": "Resend 2FA Email Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/login/2fa/resend",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "2fa", "resend"]
+            },
+            "description": "Triggers email resend for the 2FA code."
+          },
+          "response": []
+        },
+        {
+          "name": "2FA TOTP Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/login/2fa/totp",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "2fa", "totp"]
+            },
+            "description": "Renders the TOTP (Google Authenticator) verification screen."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit 2FA TOTP Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "code",
+                  "value": "123456",
+                  "description": "The standard 6-digit TOTP code",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/login/2fa/totp",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "2fa", "totp"]
+            },
+            "description": "Submit Google Authenticator code."
+          },
+          "response": []
+        },
+        {
+          "name": "WebAuthn Passwordless Login Start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "email",
+                  "value": "user@example.com",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/login/webauthn-start",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "webauthn-start"]
+            },
+            "description": "Initiates a passwordless passkey login and returns credential assertion options."
+          },
+          "response": []
+        },
+        {
+          "name": "WebAuthn Passwordless Login Verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"credential\": {\n    \"id\": \"...\",\n    \"rawId\": \"...\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"authenticatorData\": \"...\",\n      \"clientDataJSON\": \"...\",\n      \"signature\": \"...\",\n      \"userHandle\": \"...\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/login/webauthn-verify",
+              "host": ["{{BASE_URL}}"],
+              "path": ["login", "webauthn-verify"]
+            },
+            "description": "Submit a WebAuthn login assertion credential back to the server to verify and establish session."
+          },
+          "response": []
+        },
+        {
+          "name": "Signup Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/signup",
+              "host": ["{{BASE_URL}}"],
+              "path": ["signup"]
+            },
+            "description": "Renders user registration form."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "email",
+                  "value": "newuser@example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "securePassword123",
+                  "type": "text"
+                },
+                {
+                  "key": "confirmPassword",
+                  "value": "securePassword123",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/signup",
+              "host": ["{{BASE_URL}}"],
+              "path": ["signup"]
+            },
+            "description": "Creates a new user profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/forgot",
+              "host": ["{{BASE_URL}}"],
+              "path": ["forgot"]
+            },
+            "description": "Renders forgot password request form."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Forgot Password Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "email",
+                  "value": "user@example.com",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/forgot",
+              "host": ["{{BASE_URL}}"],
+              "path": ["forgot"]
+            },
+            "description": "Requests a password reset token to be emailed to the specified address."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/reset/:token",
+              "host": ["{{BASE_URL}}"],
+              "path": ["reset", ":token"],
+              "variable": [
+                {
+                  "key": "token",
+                  "value": "password-reset-token-received-in-email"
+                }
+              ]
+            },
+            "description": "Renders password update form for reset token."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Password Reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "password",
+                  "value": "myNewSuperSecurePassword1!",
+                  "type": "text"
+                },
+                {
+                  "key": "confirmPassword",
+                  "value": "myNewSuperSecurePassword1!",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/reset/:token",
+              "host": ["{{BASE_URL}}"],
+              "path": ["reset", ":token"],
+              "variable": [
+                {
+                  "key": "token",
+                  "value": "password-reset-token-received-in-email"
+                }
+              ]
+            },
+            "description": "Saves the newly specified password."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/logout",
+              "host": ["{{BASE_URL}}"],
+              "path": ["logout"]
+            },
+            "description": "Closes the current session and clears cookies."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. User Account Management",
+      "description": "Endpoints accessible only to authenticated users, facilitating account security, email verification, OAuth unlinking, MFA (email/app), WebAuthn devices, and data deletion.",
+      "item": [
+        {
+          "name": "Initiate Email Verification",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/account/verify",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "verify"]
+            },
+            "description": "Requests an email verification token be sent to user's registered address."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Email Verification Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/account/verify/:token",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "verify", ":token"],
+              "variable": [
+                {
+                  "key": "token",
+                  "value": "email-verification-token"
+                }
+              ]
+            },
+            "description": "Verifies user email using token parameter."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/account",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account"]
+            },
+            "description": "Renders user profile settings page showing details, connected logins, and security configuration options."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Details",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "email",
+                  "value": "updated_user@example.com",
+                  "type": "text"
+                },
+                {
+                  "key": "name",
+                  "value": "Andrew Macharia",
+                  "type": "text"
+                },
+                {
+                  "key": "gender",
+                  "value": "male",
+                  "type": "text"
+                },
+                {
+                  "key": "location",
+                  "value": "Nairobi, Kenya",
+                  "type": "text"
+                },
+                {
+                  "key": "website",
+                  "value": "https://github.com/AndrexCodes",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/profile",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "profile"]
+            },
+            "description": "Updates non-sensitive profile parameters."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "password",
+                  "value": "myBrandNewPassword123",
+                  "type": "text"
+                },
+                {
+                  "key": "confirmPassword",
+                  "value": "myBrandNewPassword123",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/password",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "password"]
+            },
+            "description": "Changes the current user's password."
+          },
+          "response": []
+        },
+        {
+          "name": "Enable Email 2FA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/2fa/email/enable",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "2fa", "email", "enable"]
+            },
+            "description": "Enables 2FA via security codes sent to the registered email."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Email 2FA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/2fa/email/remove",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "2fa", "email", "remove"]
+            },
+            "description": "Disables email 2FA."
+          },
+          "response": []
+        },
+        {
+          "name": "TOTP Setup Options (App MFA)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/account/2fa/totp/setup",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "2fa", "totp", "setup"]
+            },
+            "description": "Fetches QR code URI and secret key required to register Google Authenticator or other TOTP app."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify & Register TOTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "code",
+                  "value": "123456",
+                  "description": "The current code displayed by the TOTP application for verification",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/2fa/totp/setup",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "2fa", "totp", "setup"]
+            },
+            "description": "Submits initial TOTP code to confirm registration is correct and activates authenticator app MFA."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove TOTP Authenticator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/2fa/totp/remove",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "2fa", "totp", "remove"]
+            },
+            "description": "Disables and removes TOTP app MFA from user's account."
+          },
+          "response": []
+        },
+        {
+          "name": "WebAuthn Device Registration Start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/webauthn/register",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "webauthn", "register"]
+            },
+            "description": "Initiates passkey creation/binding flow for the currently signed-in user."
+          },
+          "response": []
+        },
+        {
+          "name": "WebAuthn Device Registration Verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credential\": {\n    \"id\": \"...\",\n    \"rawId\": \"...\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"attestationObject\": \"...\",\n      \"clientDataJSON\": \"...\",\n      \"transports\": [\"internal\"]\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/webauthn/verify",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "webauthn", "verify"]
+            },
+            "description": "Submits device attestation back to server to store the device credentials."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove WebAuthn Passkey",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "credentialId",
+                  "value": "some-registered-credential-id",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/webauthn/remove",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "webauthn", "remove"]
+            },
+            "description": "Deletes a registered passkey device from the account."
+          },
+          "response": []
+        },
+        {
+          "name": "Unlink OAuth Login Provider",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/account/unlink/:provider",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "unlink", ":provider"],
+              "variable": [
+                {
+                  "key": "provider",
+                  "value": "google",
+                  "description": "OAuth provider to unlink (e.g. google, github, facebook, twitch, microsoft, discord, etc.)"
+                }
+              ]
+            },
+            "description": "Removes OAuth access credentials linking from user profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout Everywhere",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/logout-everywhere",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "logout-everywhere"]
+            },
+            "description": "Revokes and cleans up all active session cookies and keys associated with user from MongoDB sessions storage."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete My Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/account/delete",
+              "host": ["{{BASE_URL}}"],
+              "path": ["account", "delete"]
+            },
+            "description": "Irreversibly deletes the signed-in user's profile, including their registered credentials and metadata."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. General Pages",
+      "description": "Root level pages including contact submission.",
+      "item": [
+        {
+          "name": "Home Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/",
+              "host": ["{{BASE_URL}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Contact Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/contact",
+              "host": ["{{BASE_URL}}"],
+              "path": ["contact"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Contact Form",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "name",
+                  "value": "Andrew Macharia",
+                  "type": "text"
+                },
+                {
+                  "key": "email",
+                  "value": "machariaandrew1428@gmail.com",
+                  "type": "text"
+                },
+                {
+                  "key": "message",
+                  "value": "This app is looking amazing!",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/contact",
+              "host": ["{{BASE_URL}}"],
+              "path": ["contact"]
+            },
+            "description": "Sends message using SMTP configuration."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. API Integration Proxies",
+      "description": "Contains proxy wrappers of various modern external services (Stripe, Twilio, NYT, Last.fm, HERE Maps, Lob, PubChem, Wiki, Giphy, PayPal, etc.).",
+      "item": [
+        {
+          "name": "API Examples Index",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Foursquare Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foursquare",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "foursquare"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Last.fm Artist Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/lastfm",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "lastfm"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "New York Times Articles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/nyt",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "nyt"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Steam Web API Achievements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/steam",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "steam"]
+            },
+            "description": "Requires OAuth Steam login. Fetches active achievement stats."
+          },
+          "response": []
+        },
+        {
+          "name": "Stripe Payments Screen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/stripe",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "stripe"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stripe Process Charge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "stripeToken",
+                  "value": "tok_visa",
+                  "description": "Test Stripe card token",
+                  "type": "text"
+                },
+                {
+                  "key": "stripeEmail",
+                  "value": "customer@example.com",
+                  "description": "Charged email address",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/stripe",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "stripe"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Web Scraping Hacker News",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/scraping",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "scraping"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Twilio SMS Screen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/twilio",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "twilio"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Twilio Send SMS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "number",
+                  "value": "+15005550006",
+                  "description": "Sandbox or production recipient number",
+                  "type": "text"
+                },
+                {
+                  "key": "message",
+                  "value": "Hello from Postman & Twilio!",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/twilio",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "twilio"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tumblr Profiles & Posts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/tumblr",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "tumblr"]
+            },
+            "description": "Requires authenticated Tumblr OAuth session."
+          },
+          "response": []
+        },
+        {
+          "name": "Facebook Profile Fetch",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/facebook",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "facebook"]
+            },
+            "description": "Requires linked Facebook OAuth credentials."
+          },
+          "response": []
+        },
+        {
+          "name": "GitHub User & Activity Information",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/github",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "github"]
+            },
+            "description": "If user is logged in via GitHub, returns their active repository events. Otherwise falls back to safe client API instances."
+          },
+          "response": []
+        },
+        {
+          "name": "Twitch Helix API Streams",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/twitch",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "twitch"]
+            },
+            "description": "Requires linked Twitch OAuth session. Searches active broadcaster game information."
+          },
+          "response": []
+        },
+        {
+          "name": "PayPal Billing Overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/paypal",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "paypal"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PayPal Return Successful Route",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/paypal/success",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "paypal", "success"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PayPal Cancelled Redirect Route",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/paypal/cancel",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "paypal", "cancel"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Lob Automated Mailing Letters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/lob",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "lob"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "File Upload UI Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/upload",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "upload"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "myFile",
+                  "description": "The file to upload",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/upload",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "upload"]
+            },
+            "description": "Uploads any file using Multer diskStorage memory handler."
+          },
+          "response": []
+        },
+        {
+          "name": "HERE Maps Location",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/here-maps",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "here-maps"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Google Maps Platform Directions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/google-maps",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "google-maps"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Google Drive File Lister",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/google/drive",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "google", "drive"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Google Sheets Document Reader",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/google/sheets",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "google", "sheets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Alpha Vantage MSFT Price Chart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/chart",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "chart"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "QuickBooks Financial Services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/quickbooks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "quickbooks"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Trakt Watchlist Info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/trakt",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "trakt"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PubChem Chemical Search",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/pubchem",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "pubchem"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Wikipedia Article Summaries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/wikipedia",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "wikipedia"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GIPHY Searches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/giphy",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "giphy"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. AI Integration Demos",
+      "description": "Endpoints dedicated to artificial intelligence integrations including natural language department classification, vision analysis, PDF RAG engines, and conversational AI agents.",
+      "item": [
+        {
+          "name": "AI Examples Index",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/ai",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "LLM Classifier UI Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/ai/llm-classifier",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "llm-classifier"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Classify Inquiry Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "inputText",
+                  "value": "I haven't received my refund of $50 for order #48291 even though it was cancelled 10 days ago.",
+                  "description": "The customer service text message to classify",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/ai/llm-classifier",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "llm-classifier"]
+            },
+            "description": "Uses Groq and LLM system prompts to categorize consumer messages into departments (e.g. Returns and Refunds, Order Tracking, etc.) returning a classified department value."
+          },
+          "response": []
+        },
+        {
+          "name": "LLM Camera Vision Form",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/ai/llm-camera",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "llm-camera"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Analyze Camera Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "description": "The photo captured from device camera to describe.",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/ai/llm-camera",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "llm-camera"]
+            },
+            "description": "Processes camera capture images using Groq Vision model and describes contents."
+          },
+          "response": []
+        },
+        {
+          "name": "RAG Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/ai/rag",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "rag"]
+            },
+            "description": "Lists currently indexed files in vector database chunks collection."
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest RAG Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "myFiles",
+                  "description": "A PDF document to parse, embed, and ingest into the RAG vector store.",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/ai/rag",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "rag"]
+            },
+            "description": "Upload and parse files to build semantic embeddings in RAG store."
+          },
+          "response": []
+        },
+        {
+          "name": "Query RAG Knowledge Base",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "queryText",
+                  "value": "What are the key findings in the loaded document?",
+                  "description": "The question to query against vector stores.",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/ai/rag/query",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "rag", "query"]
+            },
+            "description": "Queries vector database chunks of ingested PDFs to yield context-aware RAG responses using LLMs."
+          },
+          "response": []
+        },
+        {
+          "name": "Get AI Agent Chat Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/ai/ai-agent",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "ai-agent"]
+            },
+            "description": "Retrieves chat dashboard UI with previous conversation threads history."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Message to AI Agent Chatbot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "message",
+                  "value": "Can you check if there are any active promotions or help me organize my weekly calendar?",
+                  "description": "The interactive prompt query directed to the conversational workflow agent.",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/ai/ai-agent/chat",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "ai-agent", "chat"]
+            },
+            "description": "Triggers multi-turn chatbot conversation state loops."
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Chat Session History",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{CSRF_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "x-api-request",
+                "value": "true",
+                "description": "Request JSON response instead of HTML templates",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": []
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/ai/ai-agent/clear",
+              "host": ["{{BASE_URL}}"],
+              "path": ["ai", "ai-agent", "clear"]
+            },
+            "description": "Clears standard conversational checkpoints memory from state stores."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "https://ais-pre-ozpaxhkolfawsdzhjvauae-231356390789.europe-west3.run.app",
+      "type": "string"
+    },
+    {
+      "key": "CSRF_TOKEN",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
