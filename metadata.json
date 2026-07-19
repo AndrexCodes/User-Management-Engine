@@ -1,0 +1,6 @@
+{
+  "name": "User Management Engine",
+  "description": "A robust, full-stack user management system with support for modern authentication, passkeys/WebAuthn, and OAuth integrations.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
