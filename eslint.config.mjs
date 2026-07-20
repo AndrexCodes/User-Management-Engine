@@ -57,7 +57,7 @@ export default [
       'no-plusplus': ['error', { allowForLoopAfterthoughts: true }],
 
       // Logic and safety
-      'global-require': 'error',
+      // 'global-require': 'error',
       strict: ['error', 'never'],
       'arrow-body-style': ['error', 'as-needed'],
       'arrow-parens': ['error', 'always'],

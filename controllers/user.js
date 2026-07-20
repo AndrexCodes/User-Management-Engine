@@ -8,6 +8,8 @@ const User = require('../models/User');
 const Session = require('../models/Session');
 const nodemailerConfig = require('../config/nodemailer');
 const aiAgentController = require('./ai-agent');
+const appEvents = require('../config/events');
+const { events } = require('../config/events');
 const { revokeProviderTokens, revokeAllProviderTokens } = require('../config/token-revocation');
 
 /**
@@ -277,6 +279,8 @@ exports.postSignup = async (req, res, next) => {
     });
 
     await user.save();
+
+    appEvents.emit(events.USER_CREATED, user);
 
     if (req.body.passwordless) {
       await sendPasswordlessSignupLink(user, req);

@@ -16,6 +16,7 @@ const passport = require('passport');
 const rateLimit = require('express-rate-limit');
 const { flash } = require('./config/flash');
 const { getFileHash } = require('./config/cacheBust');
+require('./config/eventHandler');
 
 /**
  * Load environment variables from .env file, where API keys and passwords are configured.
