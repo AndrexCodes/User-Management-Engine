@@ -1,13 +1,11 @@
 const appEvents = require('./events');
 const { events } = require('./events');
-const MedusaAdminSDK = require('./medusaSDK');
 const UserSalesChannel = require('../models/UserSalesChannel');
-
-const client = new MedusaAdminSDK();
+const {medusaClient} = require('./medusaSDK');
 
 // Handle user created event by triggering a create store admin API call to the Medusa backend.
 appEvents.on(events.USER_CREATED, async (user) => {
-  if (!client) {
+  if (!medusaClient) {
     console.warn('Skipping Medusa store creation because Medusa credentials are not configured.');
     return;
   }
@@ -34,7 +32,7 @@ appEvents.on(events.USER_CREATED, async (user) => {
       throw new Error(`Missing Medusa store address env vars: ${missingAddressFields.join(', ')}`);
     }
 
-    const result = await client.createStore({
+    const result = await medusaClient.createStore({
       name: storeName,
       description,
       locationName: process.env.MEDUSA_STORE_LOCATION_NAME,
@@ -46,7 +44,7 @@ appEvents.on(events.USER_CREATED, async (user) => {
       stockLocationId: result.stockLocation.id,
     });
 
-    // Attach use to userSalesChannel model
+    // Attach user to userSalesChannel model
     await UserSalesChannel.assignUserToChannel(
       user._id,
       result.salesChannel.id,

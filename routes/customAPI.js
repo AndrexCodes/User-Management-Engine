@@ -1,36 +1,42 @@
+// ...existing code...
 const express = require('express');
-const customAPIController = require('../controllers/customAPI');
+const { medusaClient } = require('../config/medusaSDK');
+const UserSalesChannel = require('../models/UserSalesChannel');
 
-const router = express.Router();
-
-/**
- * GET /api/custom/add-item
- * Display context for adding a new item — user's assigned sales channel/stock location
- */
-router.get('/add-item', customAPIController.getAddItem);
+const customAPIRouter = express.Router();
 
 /**
- * POST /api/custom/add-item
- * Add a new product item to Medusa
- *
- * Request body:
- * {
- *   "title": "Product Name",
- *   "description": "Optional description",
- *   "status": "published",
- *   "variants": [
- *     {
- *       "title": "Default Variant",
- *       "sku": "UNIQUE-SKU-123",
- *       "prices": [{ "currency_code": "usd", "amount": 1000 }],
- *       "quantity": 50
- *     }
- *   ],
- *   "options": [{ "title": "Color", "values": ["Red", "Blue"] }],
- *   "images": ["https://example.com/image.jpg"],
- *   "thumbnail": "https://example.com/thumbnail.jpg"
- * }
+ * POST /api/default/add-item
+ * Proxy request body to medusaClient.addItem and return created product
+ * If the authenticated user has a default UserSalesChannel, attach its
+ * salesChannelId and stockLocationId to the payload when calling addItem.
  */
-router.post('/add-item', customAPIController.postAddItem);
+customAPIRouter.post('/add-item', async (req, res, next) => {
+  try {
+    await medusaClient.ready;
+    const payload = { ...(req.body || {}) };
 
-module.exports = router;
+    const userChannel = await UserSalesChannel.findDefaultForUser(req.user._id);
+    if (!userChannel) {
+      return res.status(400).json({ error: 'No default sales channel found for user' });
+    }
+
+    payload.salesChannelId = userChannel.salesChannelId;
+    payload.stockLocationId = userChannel.stockLocationId;
+
+    // Ensure required Medusa params are present
+    if (!payload.salesChannelId) {
+      return res.status(400).json({ error: 'salesChannelId is required' });
+    }
+    if (!payload.stockLocationId) {
+      return res.status(400).json({ error: 'stockLocationId is required' });
+    }
+
+    const result = await medusaClient.addItem(payload);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = customAPIRouter;
